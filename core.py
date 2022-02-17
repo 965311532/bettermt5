@@ -1,13 +1,20 @@
-# bettermt5.py
-# formatted with yapf
 from datetime import datetime, timedelta
 import pymt5adapter as mt5
+from math import ceil
 import pandas as pd
 import functools
 import pytz
 import time
 
 TIMEFRAME = mt5.TIMEFRAME
+
+
+def are_datetimes_eq(date1, date2, window=1):
+    '''Since datetimes don't support the __eq__ operator per se, this function
+    will determine if two dates are in the same windowed range (in seconds), and 
+    return True if they are (which basically means that they are that much close to e.o.)'''
+    return abs((date1 - date2).total_seconds()) <= window
+
 
 def get_current_tz_offset():
     '''Function that calculated current tz offset with broker server based on the difference
@@ -16,12 +23,16 @@ def get_current_tz_offset():
     TO-DO: allow function to work on weekends (currently it will just return last friday's candle
     TO-DO: allow function to work even if "EURUSD" isn't supported by broker'''
 
-    last_candle = mt5.copy_rates_from_pos('EURUSD', TIMEFRAME.M1, start_pos=0, count=1)
+    last_candle = mt5.copy_rates_from_pos('EURUSD',
+                                          TIMEFRAME.M1,
+                                          start_pos=0,
+                                          count=1)
     last_candle_time = datetime.fromtimestamp(last_candle[0][0])
     reference = datetime.utcnow().replace(second=0, microsecond=0)
-    offset = (last_candle_time - reference).total_seconds()/3600
+    offset = (last_candle_time - reference).total_seconds() / 3600
 
     return offset
+
 
 def to_seconds(timeframe: TIMEFRAME):
     return mt5.period_seconds(timeframe)
@@ -171,15 +182,21 @@ class Symbol:
 
     def get_rates_from_pos(self, timeframe: TIMEFRAME, start_pos=0, count=1):
         for n in range(10):
-             
-            rates = mt5.copy_rates_from_pos(self.name, timeframe, start_pos, count)
+
+            rates = mt5.copy_rates_from_pos(self.name, timeframe, start_pos,
+                                            count)
 
             # makes sure it's actually processed
             if len(rates) > 0:
                 break
             time.sleep(0.1)
 
-        return mt5_date_to_utc(rates)
+        rates = mt5_date_to_utc(rates)
+
+        if len(rates) != count:
+            raise ValueError(f'expected {count=} but {len(rates)=}')
+
+        return rates
 
     def get_rates_from(self,
                        timeframe: TIMEFRAME,
@@ -196,8 +213,25 @@ class Symbol:
                 break
             time.sleep(0.1)
 
-        return mt5_date_to_utc(rates)
-            
+        rates = mt5_date_to_utc(rates)  # adjusts rates
+
+        # Checks that the datetime_from returned has the correct date
+        if not are_datetimes_eq(rates['time'].iloc[-1],
+                                datetime_from,
+                                window=to_seconds(timeframe)):
+            raise ValueError(
+                f'expected {datetime_from=} but {rates["time"].iloc[-1]=}')
+
+        # Checks that the expected datetime_to is correct
+        exp_datetime_to = datetime_from - to_timedelta(timeframe) * (count - 1)
+        if not are_datetimes_eq(rates['time'].iloc[0],
+                                exp_datetime_to,
+                                window=to_seconds(timeframe)):
+            raise ValueError(
+                f'expected {exp_datetime_to=} but {rates["time"].iloc[0]=}')
+
+        return rates
+
     def get_rates_range(self,
                         timeframe: TIMEFRAME,
                         datetime_from: datetime,
@@ -224,9 +258,8 @@ class Symbol:
         if not include_last:
             # if we don't want the last candle, we can just
             # move time back, as the default behaviour of mt5
-            # is inclusive anyway (should double check)
+            # is inclusive anyway
             datetime_to_adj -= offset
-
 
         for n in range(10):
             rates = mt5.copy_rates_range(self.name, timeframe,
@@ -236,8 +269,35 @@ class Symbol:
             if len(rates) > 0:
                 break
             time.sleep(0.1)
-        
-        return mt5_date_to_utc(rates)
+
+        rates = mt5_date_to_utc(rates)  # adjusts rates
+
+        # Checks that the datetime_from returned has the correct date
+        if not are_datetimes_eq(rates['time'].iloc[0],
+                                datetime_from,
+                                window=to_seconds(timeframe)):
+            raise ValueError(
+                f'expected {datetime_from=} but {rates["time"].iloc[0]=}')
+
+        # Checks that the datetime_to returned has the correct date
+        if not are_datetimes_eq(rates['time'].iloc[-1],
+                                datetime_to,
+                                window=to_seconds(timeframe)):
+            raise ValueError(
+                f'expected {datetime_to=} but {rates["time"].iloc[-1]=}')
+
+        # Checks that the rates returned match the expected size of the request
+        seconds_range = abs((datetime_to - datetime_from).total_seconds())
+        seconds_tf = to_seconds(timeframe)
+        exp_candles = int(
+            ceil(seconds_range / seconds_tf)  # it will always be upper bound
+            + include_first + 0  # +1 if first candle is included
+            + include_last - 1)  # -1 if last candle is not included
+
+        if len(rates) != exp_candles:
+            raise ValueError(f'{exp_candles=} but {len(rates)=}')
+
+        return rates
 
     def history(self,
                 timeframe: TIMEFRAME,
@@ -247,9 +307,8 @@ class Symbol:
                 count: int = None,
                 include_first: bool = True,
                 include_last: bool = True):
-        """Returns the correct result based on the provided args.
+        """Interface: returns the correct result based on the provided args.
         Leaves the freedom to choose arbitrarily what kind of request you want to make to mt5"""
-
         if datetime_from is not None:
 
             if datetime_to is not None:
@@ -285,11 +344,15 @@ def main():
         s = Symbol("GBPJPY")
         print(f"{s.info.ask=}")
         t_from = pytz.timezone("Europe/Rome").localize(
-            datetime(2021, 1, 6, 11, 25, 34))
-        t_to = t_from + timedelta(hours=2)
-        hist = s.history(TIMEFRAME.M5, datetime_from=t_from, datetime_to=t_to)
-        hist2 = s.history(TIMEFRAME.H12, datetime_from=t_from, count=10)
-        print(f"{hist=}\n{hist2=}")
+            datetime(2021, 1, 6, 11, 24))
+        t_to = t_from + timedelta(hours=1, minutes=3)
+        timeframe = TIMEFRAME.M5
+        
+        hist = s.history(timeframe, datetime_from=t_from, datetime_to=t_to)
+        print(f'{timeframe=}\n{str(t_from)=}\n{str(t_to)=}\n{hist}')
+
+        hist2 = s.get_rates_from_pos(mt5.TIMEFRAME.M1)
+        print(hist2)
 
 
 if __name__ == "__main__":
