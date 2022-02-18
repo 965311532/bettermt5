@@ -2,9 +2,8 @@ from datetime import datetime, timedelta
 import pymt5adapter as mt5
 from math import ceil
 import pandas as pd
-import functools
-import pytz
 import time
+import pytz
 
 TIMEFRAME = mt5.TIMEFRAME
 
@@ -345,7 +344,7 @@ def main():
         print(f"{s.info.ask=}")
         t_from = pytz.timezone("Europe/Rome").localize(
             datetime(2021, 1, 6, 11, 24))
-        t_to = t_from + timedelta(hours=1, minutes=3)
+        t_to = t_from + timedelta(hours=10, minutes=3)
         timeframe = TIMEFRAME.M5
         
         hist = s.history(timeframe, datetime_from=t_from, datetime_to=t_to)
