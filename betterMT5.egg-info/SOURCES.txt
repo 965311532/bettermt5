@@ -1,7 +1,0 @@
-README.md
-setup.py
-betterMT5.egg-info/PKG-INFO
-betterMT5.egg-info/SOURCES.txt
-betterMT5.egg-info/dependency_links.txt
-betterMT5.egg-info/requires.txt
-betterMT5.egg-info/top_level.txt
