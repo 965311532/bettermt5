@@ -152,7 +152,12 @@ class Symbol:
 
         # Initializes the Symbol allowed symbol dict
         if Symbol.allowed_symbols is None:
-            Symbol.allowed_symbols = {v.name: v for v in mt5.symbols_get()}
+            try:
+                Symbol.allowed_symbols = {v.name: v for v in mt5.symbols_get()}
+            except TypeError:
+                raise ValueError(
+                "You must initiate Symbol inside a mt5.connected() context manager"
+            )
 
         self.name = name
         self.info = Symbol.allowed_symbols.get(name, None)
