@@ -7,6 +7,13 @@ import pytz
 
 TIMEFRAME = mt5.TIMEFRAME
 
+class UnexpectedValueError(ValueError):
+    def __init__(self, expected, actual, rates=None):
+        self.diff = expected-actual
+        self.message = f'{expected=} but got {actual=}, diff={self.diff}'
+        self.rates = rates
+        super().__init__(self.message)
+
 
 def are_datetimes_eq(date1, date2, window=1):
     '''Since datetimes don't support the __eq__ operator per se, this function
@@ -198,7 +205,7 @@ class Symbol:
         rates = mt5_date_to_utc(rates)
 
         if len(rates) != count:
-            raise ValueError(f'expected {count=} but {len(rates)=}')
+            raise UnexpectedValueError(count, len(rates), rates)
 
         return rates
 
@@ -223,16 +230,14 @@ class Symbol:
         if not are_datetimes_eq(rates['time'].iloc[-1],
                                 datetime_from,
                                 window=to_seconds(timeframe)):
-            raise ValueError(
-                f'expected {datetime_from=} but {rates["time"].iloc[-1]=}')
+            raise UnexpectedValueError(datetime_from, rates['time'].iloc[-1])
 
         # Checks that the expected datetime_to is correct
         exp_datetime_to = datetime_from - to_timedelta(timeframe) * (count - 1)
         if not are_datetimes_eq(rates['time'].iloc[0],
                                 exp_datetime_to,
                                 window=to_seconds(timeframe)):
-            raise ValueError(
-                f'expected {exp_datetime_to=} but {rates["time"].iloc[0]=}')
+            raise UnexpectedValueError(exp_datetime_to, rates['time'].iloc[0])
 
         return rates
 
@@ -280,26 +285,24 @@ class Symbol:
         if not are_datetimes_eq(rates['time'].iloc[0],
                                 datetime_from,
                                 window=to_seconds(timeframe)):
-            raise ValueError(
-                f'expected {datetime_from=} but {rates["time"].iloc[0]=}')
+            raise UnexpectedValueError(datetime_from, rates['time'].iloc[0])
 
         # Checks that the datetime_to returned has the correct date
         if not are_datetimes_eq(rates['time'].iloc[-1],
                                 datetime_to,
                                 window=to_seconds(timeframe)):
-            raise ValueError(
-                f'expected {datetime_to=} but {rates["time"].iloc[-1]=}')
+            raise UnexpectedValueError(datetime_to, rates['time'].iloc[-1])
 
         # Checks that the rates returned match the expected size of the request
         seconds_range = abs((datetime_to - datetime_from).total_seconds())
         seconds_tf = to_seconds(timeframe)
         exp_candles = int(
-            ceil(seconds_range / seconds_tf)  # it will always be upper bound
-            + include_first + 0  # +1 if first candle is included
+            ceil(seconds_range / seconds_tf) # it will always be upper bound
+            + include_first # +1 if first candle is included
             + include_last - 1)  # -1 if last candle is not included
 
-        if len(rates) != exp_candles:
-            raise ValueError(f'{exp_candles=} but {len(rates)=}')
+        if abs(len(rates) - exp_candles) > 0:
+            raise UnexpectedValueError(exp_candles, len(rates), rates)
 
         return rates
 
