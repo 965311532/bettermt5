@@ -175,6 +175,9 @@ class Symbol:
         # Appends to Symbol.all list
         if self._name not in [s.name for s in Symbol.all]:
             Symbol.all.append(self)
+    
+    def to_dict(self):
+        return dict(name=self.name, info=self.info)
 
     @property
     def name(self):
