@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="bettermt5",
-    version="0.9",
+    version="0.9.1",
     author="Gabriele Armento",
     author_email="contact@gabrielearmento.com",
     description="A simple MetaTrader5 wrapper",
