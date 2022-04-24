@@ -1,0 +1,2 @@
+include bettermt5/templates/static/*
+include bettermt5/templates/dynamic/*
