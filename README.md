@@ -1,2 +1,4 @@
 # betterMT5
-My implementation of the MetaTrader5 API for Python, based on the official MetaTrader5 API and the pymt5adapter library.
+A simple wrapper around the MetaTrader5 API.
+
+I customized the API to make it easier to use, fixed a few counter-intuitive bugs, and added a few features.
